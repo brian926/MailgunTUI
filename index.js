@@ -41,22 +41,36 @@ var mailgun_js_1 = require("mailgun.js");
 var readline = require("readline");
 var dotenv = require("dotenv");
 dotenv.config();
+var rl = readline.createInterface({
+    input: process.stdin,
+    output: process.stdout
+});
+function question(questionText) {
+    return __awaiter(this, void 0, void 0, function () {
+        return __generator(this, function (_a) {
+            return [2 /*return*/, new Promise(function (resolve) {
+                    rl.question(questionText, function (choice) {
+                        resolve(choice);
+                    });
+                })];
+        });
+    });
+}
 function getMenuChoice(options) {
-    if (options.at(-1) != "Exit") {
-        options.push("Exit");
-    }
-    console.log("Menu:");
-    options.forEach(function (option, index) {
-        console.log("".concat(index + 1, ". ").concat(option));
-    });
-    var rl = readline.createInterface({
-        input: process.stdin,
-        output: process.stdout
-    });
-    return new Promise(function (resolve) {
-        rl.question("Enter your choice: ", function (choice) {
-            rl.close();
-            resolve(choice);
+    return __awaiter(this, void 0, void 0, function () {
+        return __generator(this, function (_a) {
+            switch (_a.label) {
+                case 0:
+                    if (options.at(-1) != "Exit") {
+                        options.push("Exit");
+                    }
+                    console.log("Menu:");
+                    options.forEach(function (option, index) {
+                        console.log("".concat(index + 1, ". ").concat(option));
+                    });
+                    return [4 /*yield*/, question("Enter your choice: ")];
+                case 1: return [2 /*return*/, _a.sent()];
+            }
         });
     });
 }
@@ -83,14 +97,13 @@ function choice(options) {
         });
     });
 }
-function getFails(mg) {
+function getDomains(mg) {
     return __awaiter(this, void 0, void 0, function () {
-        var domainList, fs, domainIndex, domain;
+        var domainList, domainIndex, domain;
         return __generator(this, function (_a) {
             switch (_a.label) {
                 case 0:
                     domainList = [];
-                    fs = require('fs');
                     return [4 /*yield*/, mg.domains.list()
                             .then(function (domains) {
                             for (var _i = 0, domains_1 = domains; _i < domains_1.length; _i++) {
@@ -106,20 +119,80 @@ function getFails(mg) {
                     domainIndex = _a.sent();
                     domain = domainList[domainIndex - 1];
                     console.log("You picked " + domain);
-                    if (checkExit(domain)) {
-                        return [2 /*return*/];
+                    checkExit(domain);
+                    return [2 /*return*/, domain];
+            }
+        });
+    });
+}
+function handleOutput(option, element) {
+    var fs = require('fs');
+    switch (option) {
+        case 1: {
+            console.log(element);
+        }
+        case 2: {
+            var userjson = fs.readFileSync('errors.json');
+            var users = JSON.parse(userjson);
+            users.push(element);
+            userjson = JSON.stringify(users);
+            fs.writeFileSync("errors.json", userjson, "utf-8");
+            break;
+        }
+        case 3: {
+            console.log(element);
+            var userjson = fs.readFileSync('errors.json');
+            var users = JSON.parse(userjson);
+            users.push(element);
+            userjson = JSON.stringify(users);
+            fs.writeFileSync("errors.json", userjson, "utf-8");
+            break;
+        }
+        default: {
+            break;
+        }
+    }
+}
+function getFails(mg) {
+    return __awaiter(this, void 0, void 0, function () {
+        var domain, filters, filter, filterBase, _a, options, option;
+        return __generator(this, function (_b) {
+            switch (_b.label) {
+                case 0: return [4 /*yield*/, getDomains(mg)];
+                case 1:
+                    domain = _b.sent();
+                    filters = ["Filter on email domains", "Search for email address"];
+                    return [4 /*yield*/, choice(filters)];
+                case 2:
+                    filter = _b.sent();
+                    checkExit(filters[filter - 1]);
+                    console.log(filter);
+                    _a = filter;
+                    switch (_a) {
+                        case 1: return [3 /*break*/, 3];
+                        case 2: return [3 /*break*/, 5];
                     }
+                    return [3 /*break*/, 7];
+                case 3: return [4 /*yield*/, question('Input email domains: ')];
+                case 4:
+                    filterBase = _b.sent();
+                    _b.label = 5;
+                case 5: return [4 /*yield*/, question('Input email address to search: ')];
+                case 6:
+                    filterBase = _b.sent();
+                    _b.label = 7;
+                case 7:
+                    console.log(filterBase);
+                    options = ["Output to console", "Save to JSON file", "Both output to console & save to JSON file"];
+                    return [4 /*yield*/, choice(options)];
+                case 8:
+                    option = _b.sent();
+                    checkExit(options[option - 1]);
                     mg.events.get(domain, {
                         event: 'failed'
                     }).then(function (data) {
                         data.items.forEach(function (element) {
-                            if (element.recipient.toLowerCase().includes("optus")) {
-                                var userjson = fs.readFileSync('errors.json');
-                                var users = JSON.parse(userjson);
-                                users.push(element);
-                                userjson = JSON.stringify(users);
-                                fs.writeFileSync("errors.json", userjson, "utf-8");
-                            }
+                            handleOutput(option, element);
                         });
                     })
                         .catch(function (err) { return console.error(err); });
@@ -130,9 +203,8 @@ function getFails(mg) {
 }
 function checkExit(choice) {
     if (choice == "Exit") {
-        return true;
+        process.exit();
     }
-    return false;
 }
 function main() {
     return __awaiter(this, void 0, void 0, function () {
@@ -146,9 +218,7 @@ function main() {
                 case 1:
                     region = _a.sent();
                     console.log("You picked: " + regions[region - 1]);
-                    if (checkExit(regions[region - 1])) {
-                        return [2 /*return*/];
-                    }
+                    checkExit(regions[region - 1]);
                     mailgun = new mailgun_js_1.default(FormData);
                     if (regions[region - 1] == "EU") {
                         mg = mailgun.client({ username: 'api', key: MAILGUN_API, url: 'https://api.eu.mailgun.net' });

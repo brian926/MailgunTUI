@@ -5,7 +5,20 @@ import * as dotenv from 'dotenv';
 
 dotenv.config();
 
-function getMenuChoice(options: string[]) {
+const rl = readline.createInterface({
+  input: process.stdin,
+  output: process.stdout
+});
+
+async function question(questionText) {
+  return new Promise((resolve) => {
+    rl.question(questionText, (choice) => {
+      resolve(choice);
+    })
+  })
+}
+
+async function getMenuChoice(options: string[]) {
   if (options.at(-1) != "Exit") {
     options.push("Exit");
   }
@@ -15,17 +28,7 @@ function getMenuChoice(options: string[]) {
     console.log(`${index + 1}. ${option}`);
   });
 
-  const rl = readline.createInterface({
-    input: process.stdin,
-    output: process.stdout
-  });
-
-  return new Promise((resolve) => {
-    rl.question("Enter your choice: ", (choice) => {
-      rl.close();
-      resolve(choice);
-    });
-  });
+  return await question("Enter your choice: ");
 }
 
 async function choice(options: string[]): Promise<number> {
@@ -41,9 +44,8 @@ async function choice(options: string[]): Promise<number> {
   }
 }
 
-async function getFails(mg: any) {
+async function getDomains(mg: any): Promise<string> {
   var domainList: string[] = [];
-  const fs = require('fs');
 
   await mg.domains.list()
     .then(domains => {
@@ -54,33 +56,84 @@ async function getFails(mg: any) {
     .catch(err => console.log(err));
 
   let domainIndex = await choice(domainList);
-  var domain = domainList[domainIndex - 1];
+  var domain: string = domainList[domainIndex - 1];
   console.log(`You picked ` + domain);
-  if (checkExit(domain)) {
-    return;
+  checkExit(domain)
+
+  return domain
+}
+
+function handleOutput(option: number, element: object) {
+  const fs = require('fs');
+
+  switch (option) {
+    case 1: {
+      console.log(element);
+      break;
+    }
+    case 2: {
+      let userjson = fs.readFileSync('errors.json');
+      let users = JSON.parse(userjson);
+      users.push(element);
+      userjson = JSON.stringify(users);
+      fs.writeFileSync("errors.json", userjson, "utf-8");
+      break;
+    }
+    case 3: {
+      console.log(element);
+      let userjson = fs.readFileSync('errors.json');
+      let users = JSON.parse(userjson);
+      users.push(element);
+      userjson = JSON.stringify(users);
+      fs.writeFileSync("errors.json", userjson, "utf-8");
+      break;
+    }
+    default: {
+      break;
+    }
   }
+}
+
+async function getFails(mg: any) {
+  const domain = await getDomains(mg);
+
+  const filters = ["Filter on email domains", "Search for email address"]
+  const filter = await choice(filters)
+  checkExit(filters[filter - 1])
+
+  let filterBase
+  switch (filter) {
+    case 1: {
+      filterBase = await question('Input email domains: ');
+      break;
+    }
+    case 2: {
+      filterBase = await question('Input email address to search: ');
+      break;
+    }
+    default: {
+      break;
+    }
+  }
+
+  const options = ["Output to console", "Save to JSON file", "Both output to console & save to JSON file"];
+  const option = await choice(options);
+  checkExit(options[option - 1])
 
   mg.events.get(domain, {
     event: 'failed'
   }).then(data => {
     data.items.forEach(element => {
-      if (element.recipient.toLowerCase().includes("gmail")) {
-        let userjson = fs.readFileSync('errors.json');
-        let users = JSON.parse(userjson);
-        users.push(element)
-        userjson = JSON.stringify(users)
-        fs.writeFileSync("errors.json", userjson, "utf-8")
-      }
-    });
+      handleOutput(option, element);
+    })
   })
     .catch(err => console.error(err));
 }
 
-function checkExit(choice: string): boolean {
+function checkExit(choice: string) {
   if (choice == "Exit") {
-    return true;
+    process.exit();
   }
-  return false;
 }
 
 async function main() {
@@ -90,9 +143,7 @@ async function main() {
   let region = await choice(regions);
 
   console.log("You picked: " + regions[region - 1]);
-  if (checkExit(regions[region - 1])) {
-    return;
-  }
+  checkExit(regions[region - 1])
 
   const mailgun = new Mailgun(FormData);
   var mg;
